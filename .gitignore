@@ -1,0 +1,38 @@
+# Laravel
+/vendor/
+/node_modules/
+npm-debug.log
+yarn-error.log
+
+# Environment
+.env
+.phpunit.result.cache
+
+# Storage
+/storage/*.key
+/storage/*.env
+/storage/*.php
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+
+# Debug
+.idea
+.vscode
+*.sublime-*
+
+# Docker
+.docker
+Dockerfile
+Dockerfile.*
+docker-compose.override.yml
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

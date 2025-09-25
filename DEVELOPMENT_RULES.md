@@ -1,0 +1,146 @@
+# Budget Planner Development Rules
+
+## Core Philosophy
+As a seasoned developer with a practical approach, I follow these guiding principles for the Budget Planner app:
+
+- **KISS (Keep It Simple, Stupid)**: Always prefer the simplest solution that works
+- **Single Responsibility**: Each function/class should do one thing well
+- **Functional over Perfect**: Working code is better than perfect code that's never finished
+- **Practical Perfection**: There's no such thing as perfect code, so don't get stuck chasing it
+- **Accept Imperfections**: Redundancy and "spaghetti" code are acceptable if they don't constrain development
+
+## Application Overview
+
+### Tech Stack
+- **Backend**: Laravel 10.x
+- **Frontend**: Laravel Livewire, Alpine.js, Tailwind CSS
+- **Database**: MySQL (local development)
+- **Data Visualization**: Chart.js
+- **Authentication**: Simple Laravel auth (no Breeze/UI packages)
+- **Environment**: Local development only - no production deployment
+
+### Development Setup
+- **Docker** for containerization
+  - PHP 8.2 with necessary extensions
+  - MySQL 8.0
+  - Nginx web server
+  - Redis (optional for caching)
+- Simple `docker-compose.yml` for local development
+- One-command setup with `docker-compose up -d`
+- Database data persisted in Docker volumes
+
+### Core Modules
+1. **Income Module**
+   - Track multiple income sources (salary, freelancing, etc.)
+   - Support for recurring income entries
+   - Simple category management
+
+2. **Expense Module**
+   - Record and categorize expenses
+   - Recurring expense functionality
+   - Basic notes attachment
+
+3. **Budget Module**
+   - Set monthly category budgets
+   - Visual indicators for budget status
+   - Simple remaining budget calculations
+
+4. **Reporting**
+   - Basic income vs. expense visualization
+   - Category spending breakdown
+   - Monthly/Yearly summaries
+
+5. **Settings**
+   - Category management
+   - Basic data backup/restore
+   - Simple configuration options
+
+## Development Approach
+
+### 1. Simplicity First
+- Choose the most straightforward solution
+- Avoid over-engineering
+- If something can be done simply with basic logic, do it that way
+- Complex algorithms only when absolutely necessary
+- Use standard Laravel/Livewire patterns
+- Favor convention over configuration
+
+### 2. Code Organization
+- Keep files reasonably sized (under 500 lines preferred)
+- Group related functionality logically
+- Don't obsess over perfect architecture
+- If it works and is maintainable enough, it's good
+
+### 3. Coding Standards
+- Use clear, descriptive variable and function names
+- Comment complex business logic, not obvious code
+- Follow consistent indentation and formatting
+- Don't worry about minor style inconsistencies
+
+### 4. Error Handling
+- Handle common errors gracefully
+- Log errors for debugging
+- Don't over-engineer error handling
+- User-friendly error messages are more important than detailed technical ones
+- Use basic try-catch blocks where needed
+- Log important errors for debugging
+
+### 5. Database/Schema
+- MySQL 8.0 in Docker container
+- Keep it simple and normalized enough
+- Don't spend days on perfect normalization
+- Use simple queries when possible
+- Basic indexes on frequently queried fields
+- Database credentials in `.env` (use `.env.example` as template)
+- Database data persists in Docker volumes
+
+### 6. User Interface
+- Clean, intuitive design
+- Don't over-polish unless it affects usability
+- Responsive design basics
+- Focus on core functionality first
+- Use standard components where possible
+- Progressive enhancement over complex UIs
+
+### 7. Performance
+- Optimize bottlenecks when identified
+- Don't pre-optimize everything
+- Simple caching when it makes sense
+- Database queries should be efficient enough
+
+### 8. Security
+- Basic security measures (input validation, XSS prevention)
+- Secure authentication if needed
+- Don't implement enterprise-level security unless required
+- HTTPS for production
+
+### 9. Testing
+- Manual testing during development is sufficient
+- No strict test coverage requirements
+- Focus on functionality over test completeness
+- Simple browser testing for critical paths
+
+### 10. Documentation
+- Basic README with Docker setup instructions
+- Include common Docker commands
+- Document any custom container configurations
+- Inline comments only for complex logic
+- Keep documentation minimal and practical
+
+## Red Lines (Things to Avoid)
+- Analysis paralysis over perfect solutions
+- Over-engineering simple features
+- Spending days on architectural decisions
+- Perfect code reviews that block progress
+- Zero-tolerance policies on minor issues
+
+## When to Break Rules
+- When security is genuinely at risk
+- When performance issues affect user experience
+- When maintainability becomes a real problem
+- When the simple solution doesn't work
+- When a feature significantly improves user experience
+- When technical debt starts slowing down development
+
+## Remember
+This app is about helping users manage their budget effectively, not about writing perfect code. If it's functional, simple, and gets the job done, that's success.
