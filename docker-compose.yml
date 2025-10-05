@@ -1,0 +1,110 @@
+version: "3.8"
+
+services:
+    # PHP Service
+    app:
+        build:
+            context: .
+            dockerfile: docker/app/Dockerfile
+            args:
+                user: "www-data"
+                uid: "1000"
+        container_name: budget-planner-app
+        restart: unless-stopped
+        working_dir: /var/www/
+        user: "${UID:-1000}:${GID:-1000}"
+        environment:
+            - WWWUSER=${UID:-1000}
+            - WWWGROUP=${GID:-1000}
+        volumes:
+            - ./:/var/www
+        networks:
+            - budget-planner-network
+
+    # Nginx Service
+    nginx:
+        image: nginx:alpine
+        container_name: budget-planner-nginx
+        restart: unless-stopped
+        ports:
+            - "8000:80"
+        volumes:
+            - ./:/var/www
+            - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+        depends_on:
+            - app
+        networks:
+            - budget-planner-network
+
+    # MySQL Service
+    db:
+        image: mysql:8.0
+        container_name: budget-planner-db
+        restart: unless-stopped
+        environment:
+            MYSQL_DATABASE: ${DB_DATABASE:-budget_planner}
+            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+            MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+            MYSQL_USER: ${DB_USERNAME:-budget_planner}
+            SERVICE_TAGS: dev
+            SERVICE_NAME: mysql
+        volumes:
+            - dbdata:/var/lib/mysql/
+        ports:
+            - "${DB_PORT:-3306}:3306"
+        networks:
+            - budget-planner-network
+
+    # Redis Service (optional)
+    redis:
+        image: redis:alpine
+        container_name: budget-planner-redis
+        ports:
+            - "${REDIS_PORT:-6379}:6379"
+        volumes:
+            - redisdata:/data
+        networks:
+            - budget-planner-network
+
+    # phpMyAdmin Service
+    phpmyadmin:
+        image: phpmyadmin/phpmyadmin
+        container_name: budget-planner-phpmyadmin
+        restart: unless-stopped
+        ports:
+            - "8080:80"
+        environment:
+            PMA_HOST: db
+            PMA_PORT: 3306
+            PMA_USER: ${DB_USERNAME:-budget_planner}
+            PMA_PASSWORD: ${DB_PASSWORD:-secret}
+        depends_on:
+            - db
+        networks:
+            - budget-planner-network
+
+    # Vite Development Server
+    vite:
+        build:
+            context: .
+            dockerfile: docker/app/Dockerfile
+        container_name: budget-planner-vite
+        working_dir: /var/www
+        volumes:
+            - ./:/var/www
+            - /var/www/node_modules
+        ports:
+            - "5173:5173"
+        command: sh -c "npm install && npm run dev"
+        networks:
+            - budget-planner-network
+
+networks:
+    budget-planner-network:
+        driver: bridge
+
+volumes:
+    dbdata:
+        driver: local
+    redisdata:
+        driver: local
