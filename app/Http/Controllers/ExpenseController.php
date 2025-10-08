@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Expense;
+use App\Models\Budget;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +20,7 @@ class ExpenseController extends Controller
     /** @var \App\Models\User $user */
     $user = Auth::user();
     $expenses = $user->expenses()
+      ->with('budget')
       ->latest('date')
       ->paginate(10);
 
@@ -30,11 +32,15 @@ class ExpenseController extends Controller
    */
   public function create()
   {
+    /** @var \App\Models\User $user */
+    $user = Auth::user();
+    
     return view('expenses.create', [
       'expense' => new Expense(),
       'categories' => $this->getExpenseCategories(),
       'recurringIntervals' => $this->getRecurringIntervals(),
       'paymentMethods' => $this->getPaymentMethods(),
+      'budgets' => $user->budgets()->orderBy('category')->orderBy('budget_name')->get(),
     ]);
   }
 
@@ -46,6 +52,7 @@ class ExpenseController extends Controller
     $validated = $request->validate([
       'description' => 'required|string|max:255',
       'category' => 'required|string|max:255',
+      'budget_id' => 'nullable|exists:budgets,id,user_id,' . Auth::id(),
       'amount' => 'required|numeric|min:0.01|max:10000000',
       'date' => 'required|date',
       'notes' => 'nullable|string|max:1000',
@@ -88,6 +95,9 @@ class ExpenseController extends Controller
   public function show(Expense $expense)
   {
     $this->authorize('view', $expense);
+    
+    // Eager load the budget relationship
+    $expense->load('budget');
 
     return view('expenses.show', compact('expense'));
   }
@@ -98,12 +108,23 @@ class ExpenseController extends Controller
   public function edit(Expense $expense)
   {
     $this->authorize('update', $expense);
+    
+    /** @var \App\Models\User $user */
+    $user = Auth::user();
+    $budgets = $user->budgets()
+        ->orderBy('category')
+        ->orderBy('budget_name')
+        ->get();
+        
+    // Eager load the budget relationship
+    $expense->load('budget');
 
     return view('expenses.edit', [
       'expense' => $expense,
       'categories' => $this->getExpenseCategories(),
       'recurringIntervals' => $this->getRecurringIntervals(),
       'paymentMethods' => $this->getPaymentMethods(),
+      'budgets' => $budgets,
     ]);
   }
 
@@ -117,6 +138,7 @@ class ExpenseController extends Controller
     $validated = $request->validate([
       'description' => 'required|string|max:255',
       'category' => 'required|string|max:255',
+      'budget_id' => 'nullable|exists:budgets,id,user_id,' . Auth::id(),
       'amount' => 'required|numeric|min:0.01|max:10000000',
       'date' => 'required|date',
       'notes' => 'nullable|string|max:1000',

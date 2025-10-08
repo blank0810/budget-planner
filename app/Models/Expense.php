@@ -26,7 +26,14 @@ class Expense extends Model
         'is_paused',
         'payment_method',
         'receipt_path',
+        'budget_id',
     ];
+    
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
 
     /**
      * The attributes that should be cast.
@@ -40,6 +47,25 @@ class Expense extends Model
         'next_recurring_date' => 'date',
         'is_paused' => 'boolean',
     ];
+    
+    /**
+     * Check if the associated budget is exceeded
+     * 
+     * @return bool
+     */
+    public function isBudgetExceeded()
+    {
+        if (!$this->budget_id) {
+            return false;
+        }
+        
+        $budget = $this->budget;
+        if (!$budget) {
+            return false;
+        }
+        
+        return $budget->isExceeded();
+    }
 
     /**
      * Get the user that owns the expense.
@@ -47,6 +73,14 @@ class Expense extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+    
+    /**
+     * Get the budget associated with the expense.
+     */
+    public function budget()
+    {
+        return $this->belongsTo(Budget::class);
     }
 
     /**

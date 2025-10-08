@@ -3,25 +3,101 @@
 namespace App\Http\Controllers;
 
 use App\Models\Income;
+use App\Services\IncomeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Carbon\Carbon;
 
 class IncomeController extends Controller
 {
+    protected IncomeService $incomeService;
+
+    public function __construct(IncomeService $incomeService)
+    {
+        $this->incomeService = $incomeService;
+    }
+
     /**
      * Display a listing of the incomes.
      */
-    public function index()
+    public function index(Request $request)
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        $incomes = $user->incomes()
-            ->latest('date')
-            ->paginate(10);
 
-        return view('incomes.index', compact('incomes'));
+        // Get view mode from request, default to 'list' if not set or invalid
+        $validViewModes = ['list', 'monthly'];
+        $viewMode = in_array($request->get('view'), $validViewModes)
+            ? $request->get('view')
+            : 'list';
+
+        // Get filter values with defaults
+        $year = (int)$request->input('year', now()->year);
+        $month = $request->has('month') ? (int)$request->input('month') : null;
+        
+        // Get available years for dropdown
+        $availableYears = $this->incomeService->getAvailableYears($user);
+        
+        // Convert Collection to array of years and check if the selected year is valid
+        $availableYearsArray = $availableYears->toArray();
+        if (!in_array($year, $availableYearsArray) && !empty($availableYearsArray)) {
+            $year = max($availableYears);
+        }
+
+        $data = [
+            'viewMode' => $viewMode,
+            'incomes' => collect([]),
+            'monthlyIncomes' => collect([]),
+            'selectedYear' => $year,
+            'selectedMonth' => $month,
+            'availableYears' => $availableYears,
+            'months' => [
+                1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+                5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+                9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
+            ],
+        ];
+
+        if ($viewMode === 'monthly') {
+            // Get all monthly incomes for the selected year
+            $monthlyIncomes = $this->incomeService->getMonthlyIncomes($user, $year);
+            $data['monthlyIncomes'] = $monthlyIncomes;
+            
+            $monthlyData = collect();
+            for ($month = 1; $month <= 12; $month++) {
+                $summary = $this->incomeService->getMonthlySummary($user, $year, $month, false);
+                $date = Carbon::createFromDate($year, $month, 1);
+                $monthlyData->push([
+                    'month' => $date->format('F Y'),
+                    'month_name' => $date->format('F'),
+                    'month_number' => $month,
+                    'total_amount' => $summary['total_amount'],
+                    'transaction_count' => $monthlyIncomes->get($month, collect())->count(),
+                    'incomes' => $monthlyIncomes->get($month, collect()),
+                ]);
+            }
+            $data['monthlyIncomes'] = $monthlyData;
+            $data['incomesByMonth'] = $monthlyIncomes;
+        } else {
+            // Get paginated list of incomes with filters
+            $query = $user->incomes()
+                ->whereYear('date', $year);
+                
+            if ($month) {
+                $query->whereMonth('date', $month);
+            }
+            
+            $incomes = $query->orderBy('date', 'desc')
+                ->paginate(15)
+                ->withQueryString();
+                
+            $data['incomes'] = $incomes;
+        }
+
+        return view('incomes.index', $data);
     }
 
     /**
@@ -31,8 +107,8 @@ class IncomeController extends Controller
     {
         return view('incomes.create', [
             'income' => new Income(),
-            'categories' => $this->getIncomeCategories(),
-            'recurringIntervals' => $this->getRecurringIntervals(),
+            'categories' => $this->incomeService->getIncomeCategories(),
+            'recurringIntervals' => $this->incomeService->getRecurringIntervals(),
         ]);
     }
 
@@ -41,34 +117,20 @@ class IncomeController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'source' => 'required|string|max:255',
-            'category' => 'required|string|max:255',
-            'amount' => 'required|numeric|min:0.01|max:10000000',
-            'date' => 'required|date',
-            'notes' => 'nullable|string|max:1000',
-            'is_recurring' => 'boolean',
-            'recurring_interval' => [
-                Rule::requiredIf(fn() => $request->boolean('is_recurring')),
-                'nullable',
-                Rule::in(array_keys($this->getRecurringIntervals())),
-            ],
-        ]);
+        $validated = $this->validateIncomeRequest($request);
 
         try {
             /** @var \App\Models\User $user */
             $user = Auth::user();
-            $income = $user->incomes()->create($validated);
+            $user->incomes()->create($validated);
+            $this->incomeService->clearCache(Auth::user());
 
             return redirect()
                 ->route('incomes.index')
                 ->with('success', 'Income added successfully!');
         } catch (\Exception $e) {
             Log::error('Error creating income: ' . $e->getMessage());
-
-            return back()
-                ->withInput()
-                ->with('error', 'Failed to add income. Please try again.');
+            return back()->withInput()->with('error', 'Failed to add income. Please try again.');
         }
     }
 
@@ -78,7 +140,6 @@ class IncomeController extends Controller
     public function show(Income $income)
     {
         $this->authorize('view', $income);
-
         return view('incomes.show', compact('income'));
     }
 
@@ -91,8 +152,8 @@ class IncomeController extends Controller
 
         return view('incomes.edit', [
             'income' => $income,
-            'categories' => $this->getIncomeCategories(),
-            'recurringIntervals' => $this->getRecurringIntervals(),
+            'categories' => $this->incomeService->getIncomeCategories(),
+            'recurringIntervals' => $this->incomeService->getRecurringIntervals(),
         ]);
     }
 
@@ -102,33 +163,18 @@ class IncomeController extends Controller
     public function update(Request $request, Income $income)
     {
         $this->authorize('update', $income);
-
-        $validated = $request->validate([
-            'source' => 'required|string|max:255',
-            'category' => 'required|string|max:255',
-            'amount' => 'required|numeric|min:0.01|max:10000000',
-            'date' => 'required|date',
-            'notes' => 'nullable|string|max:1000',
-            'is_recurring' => 'boolean',
-            'recurring_interval' => [
-                Rule::requiredIf(fn() => $request->boolean('is_recurring')),
-                'nullable',
-                Rule::in(array_keys($this->getRecurringIntervals())),
-            ],
-        ]);
+        $validated = $this->validateIncomeRequest($request);
 
         try {
             $income->update($validated);
+            $this->incomeService->clearCache(Auth::user());
 
             return redirect()
                 ->route('incomes.index')
                 ->with('success', 'Income updated successfully!');
         } catch (\Exception $e) {
             Log::error('Error updating income: ' . $e->getMessage());
-
-            return back()
-                ->withInput()
-                ->with('error', 'Failed to update income. Please try again.');
+            return back()->withInput()->with('error', 'Failed to update income. Please try again.');
         }
     }
 
@@ -141,44 +187,78 @@ class IncomeController extends Controller
 
         try {
             $income->delete();
+            $this->incomeService->clearCache(Auth::user());
 
             return redirect()
                 ->route('incomes.index')
                 ->with('success', 'Income deleted successfully!');
         } catch (\Exception $e) {
             Log::error('Error deleting income: ' . $e->getMessage());
-
-            return back()
-                ->with('error', 'Failed to delete income. Please try again.');
         }
     }
 
     /**
-     * Get the list of income categories.
+     * Display monthly income summary and insights.
+     * 
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\View\View
      */
-    protected function getIncomeCategories(): array
+    public function monthlyView(Request $request)
     {
-        return [
-            'Salary',
-            'Freelance',
-            'Investments',
-            'Gifts',
-            'Rental',
-            'Business',
-            'Other',
-        ];
+        $year = (int)$request->input('year', now()->year);
+        $user = Auth::user();
+
+        // Get monthly data using the existing getMonthlySummary method
+        $monthlyData = collect();
+        for ($month = 1; $month <= 12; $month++) {
+            $summary = $this->incomeService->getMonthlySummary($user, $year, $month, false);
+            $date = Carbon::createFromDate($year, $month, 1);
+            $monthlyData->push([
+                'year' => $year,
+                'month' => $date->format('F Y'),
+                'month_name' => $date->format('F'),
+                'month_number' => $month,
+                'total_amount' => $summary['total_amount'],
+                'transaction_count' => $summary['transaction_count'],
+                'has_transactions' => $summary['transaction_count'] > 0
+            ]);
+        }
+
+        $availableYears = $this->incomeService->getAvailableYears($user);
+
+        // If the requested year has no data, try to find the most recent year with data
+        if ($monthlyData->isEmpty() && $availableYears->isNotEmpty()) {
+            $year = $availableYears->first();
+            return $this->monthlyView(new Request(['year' => $year]));
+        }
+
+        return view('incomes.monthly', [
+            'monthlyData' => $monthlyData,
+            'availableYears' => $availableYears,
+            'selectedYear' => $year
+        ]);
     }
 
     /**
-     * Get the list of recurring intervals.
+     * Validate the income request data.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return array
      */
-    protected function getRecurringIntervals(): array
+    protected function validateIncomeRequest(Request $request)
     {
-        return [
-            'daily' => 'Daily',
-            'weekly' => 'Weekly',
-            'monthly' => 'Monthly',
-            'yearly' => 'Yearly',
-        ];
+        return $request->validate([
+            'description' => 'required|string|max:255',
+            'category' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0.01|max:10000000',
+            'date' => 'required|date',
+            'notes' => 'nullable|string|max:1000',
+            'is_recurring' => 'boolean',
+            'recurring_interval' => [
+                Rule::requiredIf(fn() => $request->boolean('is_recurring')),
+                'nullable',
+                Rule::in(array_keys($this->incomeService->getRecurringIntervals())),
+            ],
+        ]);
     }
 }

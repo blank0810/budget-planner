@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Income> $incomes
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Expense> $expenses
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Budget> $budgets
+ * 
+ * @method \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\Income> incomes()
+ * @method \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\Expense> expenses()
+ * @method \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\Budget> budgets()
  */
 class User extends Authenticatable
 {
@@ -40,7 +44,9 @@ class User extends Authenticatable
     ];
 
     /**
-     * Get the incomes for the user.
+     * Get all income records associated with the user.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\Income>
      */
     public function incomes(): HasMany
     {

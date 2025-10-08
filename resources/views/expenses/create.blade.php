@@ -26,12 +26,12 @@
                         @csrf
                         <div class="shadow overflow-hidden sm:rounded-md">
                             <div class="px-4 py-5 bg-white sm:p-6">
-                                <x-expenses.form 
-                                    :expense="$expense" 
-                                    :categories="$categories" 
-                                    :recurringIntervals="$recurringIntervals"
-                                    :paymentMethods="$paymentMethods"
-                                />
+                                @include('expenses._form', [
+                                'expense' => $expense,
+                                'categories' => $categories,
+                                'recurringIntervals' => $recurringIntervals,
+                                'paymentMethods' => $paymentMethods
+                            ])
                             </div>
                         </div>
                     </form>

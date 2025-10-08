@@ -58,20 +58,80 @@
                                 </div>
                                 <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                                     <dt class="text-sm font-medium text-gray-500">
-                                        Payment Method
+                                        Budget
                                     </dt>
                                     <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                                        <span class="capitalize">{{ str_replace('_', ' ', $expense->payment_method) }}</span>
+                                        @if($expense->budget)
+                                            @php
+                                                $budget = $expense->budget;
+                                                $totalSpent = $budget->getTotalSpent();
+                                                $remaining = $budget->amount - $totalSpent;
+                                                $percentageUsed = $budget->amount > 0 ? ($totalSpent / $budget->amount) * 100 : 0;
+                                                $isExceeded = $expense->isBudgetExceeded();
+                                            @endphp
+                                            
+                                            <div class="space-y-2">
+                                                <div class="flex items-center">
+                                                    <span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full {{ $isExceeded ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800' }}">
+                                                        {{ $budget->budget_name }} ({{ $budget->month }}/{{ $budget->year }})
+                                                        @if($isExceeded)
+                                                            <svg class="ml-1 h-4 w-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                                            </svg>
+                                                        @endif
+                                                    </span>
+                                                </div>
+                                                
+                                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                                    @php
+                                                        $progressWidth = min(100, max(0, $percentageUsed));
+                                                        $progressColor = $isExceeded ? 'bg-red-500' : 'bg-blue-500';
+                                                    @endphp
+                                                    <div class="h-2.5 rounded-full {{ $progressColor }}" style="width: {{ $progressWidth }}%"></div>
+                                                </div>
+                                                
+                                                <div class="text-xs text-gray-600">
+                                                    <div class="grid grid-cols-3 gap-2">
+                                                        <div>
+                                                            <div class="font-medium">Budgeted</div>
+                                                            <div>${{ number_format($budget->amount, 2) }}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div class="font-medium">Spent</div>
+                                                            <div class="{{ $isExceeded ? 'text-red-600 font-semibold' : '' }}">
+                                                                ${{ number_format($totalSpent, 2) }}
+                                                                @if($budget->amount > 0)
+                                                                    <span class="text-gray-500">({{ number_format($percentageUsed, 0) }}%)</span>
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div class="font-medium">Remaining</div>
+                                                            <div class="{{ $remaining < 0 ? 'text-red-600 font-semibold' : '' }}">
+                                                                ${{ number_format($remaining, 2) }}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                @if($isExceeded)
+                                                    <div class="text-xs text-red-600 font-medium mt-1">
+                                                        <svg class="inline h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                                        </svg>
+                                                        This expense is part of an exceeded budget
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        @else
+                                            <span class="text-gray-400">Not assigned to a budget</span>
+                                        @endif
                                     </dd>
                                 </div>
                                 <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                                     <dt class="text-sm font-medium text-gray-500">
-                                        Date
+                                        Payment Method
                                     </dt>
-                                    <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                                        {{ $expense->date->format('F j, Y') }}
-                                    </dd>
-                                </div>
                                 @if($expense->receipt_path)
                                     <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                                         <dt class="text-sm font-medium text-gray-500">

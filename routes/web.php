@@ -28,6 +28,8 @@ Route::middleware('auth')->group(function () {
     });
 
     // Income Module
+    Route::get('incomes/monthly', [\App\Http\Controllers\IncomeController::class, 'monthlyView'])
+        ->name('incomes.monthly');
     Route::resource('incomes', \App\Http\Controllers\IncomeController::class);
 
     // Expense Module

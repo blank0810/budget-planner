@@ -19,6 +19,15 @@ class Budget extends Model
      */
     public function expenses()
     {
+        return $this->hasMany(Expense::class);
+    }
+    
+    /**
+     * Get the expenses for the budget by category.
+     * This is kept for backward compatibility.
+     */
+    public function expensesByCategory()
+    {
         return $this->hasMany(Expense::class, 'category', 'category')
             ->where('user_id', $this->user_id);
     }
@@ -26,6 +35,7 @@ class Budget extends Model
     protected $fillable = [
         'user_id',
         'category',
+        'budget_name',
         'amount',
         'year',
         'month',
@@ -35,10 +45,31 @@ class Budget extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
-        'year' => 'integer',
-        'month' => 'integer',
         'is_active' => 'boolean',
+        'month' => 'integer',
+        'year' => 'integer',
     ];
+    
+    /**
+     * Check if the budget has been exceeded
+     * 
+     * @return bool
+     */
+    public function isExceeded()
+    {
+        $totalSpent = $this->expenses()->sum('amount');
+        return $totalSpent > $this->amount;
+    }
+    
+    /**
+     * Get the total amount spent against this budget
+     * 
+     * @return float
+     */
+    public function getTotalSpent()
+    {
+        return (float) $this->expenses()->sum('amount');
+    }
 
     /**
      * Get the user that owns the budget.
@@ -130,7 +161,7 @@ class Budget extends Model
             }
 
             $budgets = $query->get();
-            
+
             if ($budgets->isEmpty()) {
                 return [
                     'success' => false,
@@ -143,11 +174,12 @@ class Budget extends Model
             $errors = [];
 
             foreach ($budgets as $budget) {
-                // Check if budget already exists for the target month
+                // Check if budget with same name already exists for the target month and category
                 $exists = self::where('user_id', $userId)
                     ->where('year', $toYear)
                     ->where('month', $toMonth)
                     ->where('category', $budget->category)
+                    ->where('budget_name', $budget->budget_name)
                     ->exists();
 
                 if ($exists) {
@@ -160,9 +192,10 @@ class Budget extends Model
                 $newBudget->year = $toYear;
                 $newBudget->month = $toMonth;
                 $newBudget->amount = round($budget->amount * $adjustmentFactor, 2);
+                $newBudget->budget_name = $budget->budget_name; // Ensure budget_name is copied
                 $newBudget->created_at = now();
                 $newBudget->updated_at = now();
-                
+
                 if ($newBudget->save()) {
                     $copiedCount++;
                 } else {
@@ -181,23 +214,22 @@ class Budget extends Model
             if ($copiedCount === 0 && $skippedCount > 0) {
                 $result['message'] = 'All selected budgets already exist for the target month.';
             } elseif ($copiedCount > 0) {
-                $result['message'] = "Successfully copied {$copiedCount} " . 
-                    Str::plural('budget', $copiedCount) . 
+                $result['message'] = "Successfully copied {$copiedCount} " .
+                    Str::plural('budget', $copiedCount) .
                     " to " . Carbon::create($toYear, $toMonth, 1)->format('F Y');
-                
+
                 if ($skippedCount > 0) {
                     $result['message'] .= " ({$skippedCount} skipped - already exist)";
                 }
             } else {
                 $result['success'] = false;
-                $result['message'] = 'No budgets were copied. ' . 
+                $result['message'] = 'No budgets were copied. ' .
                     ($errors ? implode(' ', $errors) : 'Please check if you have budgets to copy.');
             }
 
             return $result;
-
         } catch (\Exception $e) {
-            \Log::error('Error copying budgets: ' . $e->getMessage());
+            Log::error('Error copying budgets: ' . $e->getMessage());
             return [
                 'success' => false,
                 'message' => 'An error occurred while copying budgets: ' . $e->getMessage()
@@ -233,7 +265,7 @@ class Budget extends Model
         if ($this->amount <= 0) {
             return 100;
         }
-        
+
         return min(100, ($this->spent_amount / $this->amount) * 100);
     }
 
@@ -243,7 +275,7 @@ class Budget extends Model
     public function getStatusAttribute()
     {
         $percentage = $this->utilization_percentage;
-        
+
         if ($percentage >= 100) {
             return 'over_budget';
         } elseif ($percentage >= 80) {

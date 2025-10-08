@@ -50,6 +50,9 @@
                                                         Category
                                                     </th>
                                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                        Budget
+                                                    </th>
+                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                         Amount
                                                     </th>
                                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -69,18 +72,28 @@
                                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                             {{ $expense->date->format('M d, Y') }}
                                                         </td>
-                                                        <td class="px-6 py-4 whitespace-nowrap">
-                                                            <div class="text-sm font-medium text-gray-900">{{ $expense->description }}</div>
-                                                            @if($expense->is_recurring)
-                                                                <div class="text-xs text-red-600">
-                                                                    Recurring ({{ ucfirst($expense->recurring_interval) }})
-                                                                </div>
-                                                            @endif
+                                                        <td class="px-6 py-4">
+                                                            <div class="text-sm font-medium text-gray-900">
+                                                                {{ $expense->description }}
+                                                                @if($expense->is_recurring)
+                                                                    <span class="ml-2 text-xs text-gray-500">({{ ucfirst($expense->recurring_interval) }})</span>
+                                                                @endif
+                                                                @if($expense->budget)
+                                                                    <div class="mt-1">
+                                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $expense->isBudgetExceeded() ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}" title="{{ $expense->budget->budget_name }} ({{ $expense->budget->month }}/{{ $expense->budget->year }}): ${{ number_format($expense->budget->getTotalSpent(), 2) }} / ${{ number_format($expense->budget->amount, 2) }}">
+                                                                            {{ $expense->budget->budget_name }}
+                                                                            @if($expense->isBudgetExceeded())
+                                                                                <svg class="ml-1 h-3 w-3 inline-block" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                                                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                                                                </svg>
+                                                                            @endif
+                                                                        </span>
+                                                                    </div>
+                                                                @endif
+                                                            </div>
                                                         </td>
-                                                        <td class="px-6 py-4 whitespace-nowrap">
-                                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                                                                {{ $expense->category }}
-                                                            </span>
+                                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {{ $expense->category ?: '<span class="text-gray-400">—</span>' }}
                                                         </td>
                                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                             <span class="font-medium text-red-600">-${{ number_format($expense->amount, 2) }}</span>

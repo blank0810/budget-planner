@@ -49,6 +49,12 @@
                         <x-dropdown-link :href="route('profile.edit')">
                             {{ __('Profile') }}
                         </x-dropdown-link>
+                        
+                        <x-dropdown-link :href="route('settings')">
+                            {{ __('Settings') }}
+                        </x-dropdown-link>
+                        
+                        <div class="border-t border-gray-100"></div>
 
                         <!-- Authentication -->
                         <form method="POST" action="{{ route('logout') }}">
@@ -91,6 +97,9 @@
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('recurring.index')" :active="request()->routeIs('recurring.*')">
                 {{ __('Recurring') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('settings')" :active="request()->routeIs('settings*')">
+                {{ __('Settings') }}
             </x-responsive-nav-link>
         </div>
 

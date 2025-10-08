@@ -27,12 +27,12 @@
                         @method('PUT')
                         <div class="shadow overflow-hidden sm:rounded-md">
                             <div class="px-4 py-5 bg-white sm:p-6">
-                                <x-budgets.form 
-                                    :budget="$budget" 
-                                    :categories="$categories" 
-                                    :months="$months"
-                                    :years="$years"
-                                />
+                                @include('budgets._form', [
+                                    'budget' => $budget,
+                                    'categories' => $categories,
+                                    'months' => $months,
+                                    'years' => $years
+                                ])
                             </div>
                         </div>
                     </form>
@@ -41,4 +41,5 @@
         </div>
     </div>
 </x-app-layout>
+
 
