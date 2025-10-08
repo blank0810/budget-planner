@@ -1,61 +1,144 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Budget Planner
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A personal finance management application built with Laravel, designed to help you track your income, expenses, and budgets with a clean, intuitive interface.
 
-## About Laravel
+![Budget Planner Screenshot](https://via.placeholder.com/800x500.png?text=Budget+Planner+Screenshot)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Features
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Income Management
+- Track multiple income sources
+- Support for recurring income
+- Monthly and yearly overviews
+- Category-based organization
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Expense Tracking
+- Record and categorize expenses
+- Set up recurring expenses
+- Visual spending breakdowns
+- Receipt attachment (basic)
 
-## Learning Laravel
+### Budget Planning
+- Set monthly category budgets
+- Track spending against budgets
+- Visual budget progress indicators
+- Budget vs. actual reporting
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Reporting & Analytics
+- Income vs. expense visualization
+- Category spending analysis
+- Monthly/Yearly summaries
+- Export functionality
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## Tech Stack
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Backend
+- **Framework**: Laravel 10.x
+- **PHP**: 8.2+
+- **Database**: MySQL 8.0
+- **Caching**: Redis (optional)
 
-## Laravel Sponsors
+### Frontend
+- **UI Framework**: Tailwind CSS
+- **Interactivity**: Alpine.js
+- **Data Visualization**: Chart.js
+- **Templating**: Blade templates
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Development Tools
+- **Local Environment**: Docker
+- **Testing**: PHPUnit
+- **Code Quality**: PHP_CodeSniffer (optional)
+- **Version Control**: Git
 
-### Premium Partners
+## Getting Started
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### Prerequisites
 
-## Contributing
+#### Option 1: Docker (Recommended)
+- Docker 20.10+
+- Docker Compose 2.0+
+- Node.js 16+ and npm (for frontend assets)
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+#### Option 2: Local Development
+- PHP 8.2+
+- Composer
+- MySQL 8.0+
+- Node.js 16+ and npm
 
-## Code of Conduct
+### Installation
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+#### Docker Setup (Recommended)
 
-## Security Vulnerabilities
+1. Clone the repository:
+   ```bash
+   git clone git@github.com:blank0810/budget-planner.git
+   cd budget-planner
+   ```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+2. Copy the environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Start the Docker containers:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. Install PHP dependencies (inside container):
+   ```bash
+   docker-compose exec app composer install
+   ```
+
+5. Generate application key:
+   ```bash
+   docker-compose exec app php artisan key:generate
+   ```
+
+6. Run database migrations:
+   ```bash
+   docker-compose exec app php artisan migrate
+   ```
+
+7. Install and build frontend assets (on host machine):
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+8. Access the application at: `http://localhost:8000`
+
+#### Local Development Setup
+
+If you prefer to run PHP and MySQL locally instead of using Docker:
+
+1. Ensure you have PHP 8.2+, Composer, and MySQL 8.0+ installed
+2. Clone the repository and set up the environment as shown above
+3. Install dependencies:
+   ```bash
+   composer install
+   npm install
+   ```
+4. Configure your `.env` file with your local database credentials
+5. Run migrations:
+   ```bash
+   php artisan migrate
+   ```
+6. Start the development server:
+   ```bash
+   php artisan serve
+   npm run dev
+   ```
+7. Access the application at: `http://localhost:8000`
+
+## Development Philosophy
+
+- **KISS (Keep It Simple, Stupid)**: Prefer the simplest solution that works
+- **Single Responsibility**: Each component does one thing well
+- **Functional over Perfect**: Working code is better than perfect code
+- **Practical Development**: Focus on delivering value over architectural purity
+- **Progressive Enhancement**: Start simple and enhance as needed
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is open-source software licensed under the [MIT license](https://opensource.org/licenses/MIT).
