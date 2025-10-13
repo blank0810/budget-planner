@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class IncomeService
 {
@@ -26,8 +27,11 @@ class IncomeService
 
     $cacheKey = "user_{$user->id}_income_summary_{$year}_{$month}";
 
+    // Clear cache for testing
+    Cache::forget($cacheKey);
+    
     return Cache::remember($cacheKey, now()->addHour(), function () use ($user, $year, $month, $includeComparison) {
-      // Use query builder directly to minimize memory usage
+      // Get summary data
       $result = DB::table('incomes')
         ->select([
           DB::raw('COALESCE(SUM(amount), 0) as total_amount'),
@@ -39,11 +43,38 @@ class IncomeService
         ->whereMonth('date', $month)
         ->first();
 
+      // Get largest income for the month
+      $largestIncome = DB::table('incomes')
+        ->select(['id', 'amount', 'source', 'date'])
+        ->where('user_id', $user->id)
+        ->whereYear('date', $year)
+        ->whereMonth('date', $month)
+        ->orderBy('amount', 'desc')
+        ->first();
+
+      // Debug output
+      Log::info('Largest income query result:', [
+        'year' => $year,
+        'month' => $month,
+        'result' => $largestIncome,
+        'has_data' => !is_null($largestIncome)
+      ]);
+
       $summary = [
         'total_amount' => (float)($result->total_amount ?? 0),
         'transaction_count' => (int)($result->transaction_count ?? 0),
         'average_amount' => (float)($result->average_amount ?? 0),
       ];
+
+      // Only add largest_income if we have a result
+      if ($largestIncome) {
+        $summary['largest_income'] = [
+          'id' => $largestIncome->id,
+          'amount' => (float)$largestIncome->amount,
+          'source' => $largestIncome->source,
+          'date' => $largestIncome->date
+        ];
+      }
 
       if ($includeComparison) {
         // Get previous month data without recursion
@@ -56,13 +87,16 @@ class IncomeService
           ->first();
 
         $prevTotal = (float)($prevResult->total_amount ?? 0);
-        
+
         $summary['change_percentage'] = $prevTotal > 0
           ? (($summary['total_amount'] - $prevTotal) / $prevTotal) * 100
           : 0;
-        
+
         $summary['is_positive_change'] = $summary['change_percentage'] >= 0;
       }
+
+      // Debug the final summary
+      Log::info('Monthly summary:', $summary);
 
       return $summary;
     });
@@ -245,17 +279,17 @@ class IncomeService
    */
   public function getMonthlyIncomes(User $user, int $year): \Illuminate\Support\Collection
   {
-      $cacheKey = "user_{$user->id}_monthly_incomes_{$year}";
-      
-      return Cache::remember($cacheKey, now()->addHour(), function () use ($user, $year) {
-          return $user->incomes()
-              ->whereYear('date', $year)
-              ->orderBy('date', 'desc')
-              ->get()
-              ->groupBy(function($income) {
-                  return (int)$income->date->format('m');
-              });
-      });
+    $cacheKey = "user_{$user->id}_monthly_incomes_{$year}";
+
+    return Cache::remember($cacheKey, now()->addHour(), function () use ($user, $year) {
+      return $user->incomes()
+        ->whereYear('date', $year)
+        ->orderBy('date', 'desc')
+        ->get()
+        ->groupBy(function ($income) {
+          return (int)$income->date->format('m');
+        });
+    });
   }
 
   /**
@@ -266,15 +300,63 @@ class IncomeService
    */
   public function getAvailableYears(User $user): \Illuminate\Support\Collection
   {
-      $cacheKey = "user_{$user->id}_available_income_years";
-      
-      return Cache::remember($cacheKey, now()->addHours(24), function () use ($user) {
-          return $user->incomes()
-              ->select(DB::raw('YEAR(date) as year'))
-              ->distinct()
-              ->orderBy('year', 'desc')
-              ->pluck('year');
-      });
+    $cacheKey = "user_{$user->id}_available_income_years";
+
+    return Cache::remember($cacheKey, now()->addHours(24), function () use ($user) {
+      return $user->incomes()
+        ->select(DB::raw('YEAR(date) as year'))
+        ->distinct()
+        ->orderBy('year', 'desc')
+        ->pluck('year');
+    });
+  }
+
+  /**
+   * Get yearly income summary
+   * 
+   * @param User $user The user to get the summary for
+   * @param int $year The year to get the summary for
+   * @return array Array containing yearly summary data
+   */
+  public function getYearlySummary(User $user, int $year = null): array
+  {
+    $year = $year ?? now()->year;
+    $cacheKey = "user_{$user->id}_yearly_summary_{$year}";
+
+    return Cache::remember($cacheKey, now()->addHours(6), function () use ($user, $year) {
+      // Get monthly summaries for the year
+      $monthlySummaries = [];
+      $totalIncome = 0;
+      $transactionCount = 0;
+      $highestMonth = ['amount' => 0, 'month' => ''];
+
+      for ($month = 1; $month <= 12; $month++) {
+        $summary = $this->getMonthlySummary($user, $year, $month, false);
+        $monthlySummaries[] = [
+          'month' => Carbon::createFromDate($year, $month, 1)->format('F'),
+          'amount' => $summary['total_amount']
+        ];
+
+        $totalIncome += $summary['total_amount'];
+        $transactionCount += $summary['transaction_count'];
+
+        if ($summary['total_amount'] > $highestMonth['amount']) {
+          $highestMonth = [
+            'amount' => $summary['total_amount'],
+            'month' => Carbon::createFromDate($year, $month, 1)->format('F Y')
+          ];
+        }
+      }
+
+      return [
+        'total_income' => $totalIncome,
+        'average_monthly' => $totalIncome / 12,
+        'transaction_count' => $transactionCount,
+        'highest_month' => $highestMonth,
+        'monthly_breakdown' => $monthlySummaries,
+        'year' => $year
+      ];
+    });
   }
 
   /**
@@ -289,16 +371,16 @@ class IncomeService
         "user_{$user->id}_income_summary_{$year}_{$month}",
         "user_{$user->id}_category_breakdown_{$year}_{$month}",
       ];
-      
+
       // Also clear trends and other caches since they might be affected
       $startDate = now()->subMonths(5)->startOfMonth();
       $endDate = now()->endOfMonth();
       $keys = array_merge($keys, [
-          "user_{$user->id}_income_trends_{$startDate->format('Ym')}_{$endDate->format('Ym')}",
-          "user_{$user->id}_recurring_income_summary",
-          "user_{$user->id}_available_income_years"
+        "user_{$user->id}_income_trends_{$startDate->format('Ym')}_{$endDate->format('Ym')}",
+        "user_{$user->id}_recurring_income_summary",
+        "user_{$user->id}_available_income_years"
       ]);
-      
+
       foreach ($keys as $key) {
         Cache::forget($key);
       }
@@ -311,5 +393,54 @@ class IncomeService
         Cache::flush();
       }
     }
+  }
+
+  // Add these methods to IncomeService.php
+
+  /**
+   * Get filtered and sorted transactions
+   */
+  public function getFilteredTransactions(User $user, array $filters = [], array $sort = []): \Illuminate\Pagination\LengthAwarePaginator
+  {
+    $query = $user->incomes()->with('category');
+
+    // Apply filters
+    if (!empty($filters['year'])) {
+      $query->whereYear('date', $filters['year']);
+    }
+
+    if (!empty($filters['month'])) {
+      $query->whereMonth('date', $filters['month']);
+    }
+
+    if (!empty($filters['category'])) {
+      $query->where('category_id', $filters['category']);
+    }
+
+    // Apply sorting
+    $sortField = $sort['field'] ?? 'date';
+    $sortDirection = $sort['direction'] ?? 'desc';
+    $query->orderBy($sortField, $sortDirection);
+
+    return $query->paginate(15);
+  }
+
+  /**
+   * Export transactions to CSV
+   */
+  public function exportToCsv(User $user, array $filters = []): \Illuminate\Support\Collection
+  {
+    $query = $user->incomes();
+
+    // Apply the same filters as getFilteredTransactions
+    if (!empty($filters['year'])) {
+      $query->whereYear('date', $filters['year']);
+    }
+
+    if (!empty($filters['month'])) {
+      $query->whereMonth('date', $filters['month']);
+    }
+
+    return $query->get();
   }
 }

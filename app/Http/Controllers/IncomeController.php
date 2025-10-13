@@ -37,15 +37,18 @@ class IncomeController extends Controller
         // Get filter values with defaults
         $year = (int)$request->input('year', now()->year);
         $month = $request->has('month') ? (int)$request->input('month') : null;
-        
+
         // Get available years for dropdown
         $availableYears = $this->incomeService->getAvailableYears($user);
-        
-        // Convert Collection to array of years and check if the selected year is valid
+
+        // Check if the selected year is valid, if not, use the most recent year
         $availableYearsArray = $availableYears->toArray();
-        if (!in_array($year, $availableYearsArray) && !empty($availableYearsArray)) {
-            $year = max($availableYears);
+        if (!in_array($year, $availableYearsArray) && $availableYears->isNotEmpty()) {
+            $year = $availableYears->max();
         }
+
+        // Get yearly summary data
+        $yearlySummary = $this->incomeService->getYearlySummary($user, $year);
 
         $data = [
             'viewMode' => $viewMode,
@@ -53,11 +56,23 @@ class IncomeController extends Controller
             'monthlyIncomes' => collect([]),
             'selectedYear' => $year,
             'selectedMonth' => $month,
+            'selectedCategory' => $request->input('category'),
             'availableYears' => $availableYears,
+            'yearlySummary' => $yearlySummary,
+            'categories' => $this->incomeService->getIncomeCategories(),
             'months' => [
-                1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
-                5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
-                9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
+                1 => 'January',
+                2 => 'February',
+                3 => 'March',
+                4 => 'April',
+                5 => 'May',
+                6 => 'June',
+                7 => 'July',
+                8 => 'August',
+                9 => 'September',
+                10 => 'October',
+                11 => 'November',
+                12 => 'December'
             ],
         ];
 
@@ -65,7 +80,7 @@ class IncomeController extends Controller
             // Get all monthly incomes for the selected year
             $monthlyIncomes = $this->incomeService->getMonthlyIncomes($user, $year);
             $data['monthlyIncomes'] = $monthlyIncomes;
-            
+
             $monthlyData = collect();
             for ($month = 1; $month <= 12; $month++) {
                 $summary = $this->incomeService->getMonthlySummary($user, $year, $month, false);
@@ -77,23 +92,30 @@ class IncomeController extends Controller
                     'total_amount' => $summary['total_amount'],
                     'transaction_count' => $monthlyIncomes->get($month, collect())->count(),
                     'incomes' => $monthlyIncomes->get($month, collect()),
+                    'largest_income' => $summary['largest_income'] ?? null,
                 ]);
             }
-            $data['monthlyIncomes'] = $monthlyData;
+            $data['monthlyData'] = $monthlyData;
+            $data['monthlyIncomes'] = $monthlyData; // Keep for backward compatibility
             $data['incomesByMonth'] = $monthlyIncomes;
+            // dd($data);
         } else {
             // Get paginated list of incomes with filters
             $query = $user->incomes()
                 ->whereYear('date', $year);
-                
+
             if ($month) {
                 $query->whereMonth('date', $month);
             }
-            
+
+            if ($request->filled('category')) {
+                $query->where('category', $request->input('category'));
+            }
+
             $incomes = $query->orderBy('date', 'desc')
                 ->paginate(15)
                 ->withQueryString();
-                
+
             $data['incomes'] = $incomes;
         }
 
@@ -248,7 +270,7 @@ class IncomeController extends Controller
     protected function validateIncomeRequest(Request $request)
     {
         return $request->validate([
-            'description' => 'required|string|max:255',
+            // 'description' => 'required|string|max:255',
             'category' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0.01|max:10000000',
             'date' => 'required|date',

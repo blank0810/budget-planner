@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Expense;
-use App\Models\Budget;
+use App\Services\ExpenseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -12,19 +12,195 @@ use Illuminate\Validation\Rule;
 
 class ExpenseController extends Controller
 {
-  /**
-   * Display a listing of the expenses.
-   */
-  public function index()
-  {
-    /** @var \App\Models\User $user */
-    $user = Auth::user();
-    $expenses = $user->expenses()
-      ->with('budget')
-      ->latest('date')
-      ->paginate(10);
+  protected $expenseService;
 
-    return view('expenses.index', compact('expenses'));
+  public function __construct(ExpenseService $expenseService)
+  {
+    $this->expenseService = $expenseService;
+  }
+
+  /**
+   * Display monthly summaries of expenses
+   */
+  public function monthly(Request $request)
+  {
+    $user = $request->user();
+    $selectedYear = $request->input('year', date('Y'));
+
+    $monthlySummaries = $this->expenseService->getMonthlySummaries($user, $selectedYear);
+    $availableYears = $this->expenseService->getAvailableYears($user);
+
+    // Convert collection of objects to array of arrays for the view
+    $monthlySummariesArray = $monthlySummaries->map(function ($item) {
+      return (array) $item;
+    })->toArray();
+
+    return view('expenses.monthly', [
+      'monthlySummaries' => $monthlySummariesArray,
+      'selectedYear' => $selectedYear,
+      'availableYears' => $availableYears,
+    ]);
+  }
+
+  /**
+   * Display a listing of the resource.
+   */
+  public function index(Request $request)
+  {
+    $user = $request->user();
+    $selectedMonth = $request->input('month', date('m'));
+    $selectedYear = $request->input('year', date('Y'));
+    $selectedCategory = $request->input('category');
+    $viewMode = $request->input('view', 'list');
+
+    // Get available years for the filter dropdown
+    $availableYears = $this->expenseService->getAvailableYears($user);
+
+    // Get categories for filter dropdown
+    $categories = $this->expenseService->getExpenseCategories();
+
+    // Get monthly summaries for the selected year
+    $monthlySummaries = $this->expenseService->getMonthlySummaries($user, $selectedYear);
+
+    // Convert to array and format for the view
+    $monthlySummaries = $monthlySummaries->map(function ($item) {
+      return [
+        'month' => $item->month_name . ' ' . $item->year,
+        'month_name' => $item->month_name,
+        'month_number' => $item->month,
+        'year' => $item->year,
+        'total_amount' => $item->total_amount,
+        'transaction_count' => $item->transaction_count,
+        'payment_methods' => $item->payment_methods ?? [],
+        'category_breakdown' => $item->category_breakdown ?? [],
+        'busiest_day' => $item->busiest_day ?? null,
+        'expenses' => $item->expenses->map(function ($expense) {
+          return [
+            'id' => $expense->id,
+            'amount' => $expense->amount,
+            'description' => $expense->description,
+            'date' => $expense->date->toDateString(),
+            'category' => $expense->category ? [
+              'name' => $expense->category
+            ] : null
+          ];
+        })->toArray()
+      ];
+    })->values()->toArray();
+
+    // dd($monthlySummaries);
+
+    // Get yearly summary for the dashboard
+    $yearlySummary = $this->expenseService->getYearlySummary($user, $selectedYear);
+
+    // dd($yearlySummary);
+
+    // Get previous year's summary for comparison
+    $previousYear = $selectedYear - 1;
+    $previousYearSummary = $this->expenseService->getYearlySummary($user, $previousYear);
+
+    // Ensure all required keys exist in the yearly summary
+    $yearlySummary = array_merge([
+      'transaction_count' => 0,
+      'monthly_average_transactions' => 0,
+      'year' => $selectedYear
+    ], (array) $yearlySummary);
+
+    // Ensure previous year summary has required keys
+    $previousYearSummary = array_merge([
+      'transaction_count' => 0,
+      'monthly_average_transactions' => 0,
+      'year' => $previousYear
+    ], (array) $previousYearSummary);
+
+    // dd($monthlySummaries);
+
+    // If in monthly view, return early with just the monthly summaries
+    if ($viewMode === 'monthly') {
+      return view('expenses.index', [
+        'viewMode' => 'monthly',
+        'monthlySummaries' => $monthlySummaries,
+        'selectedYear' => $selectedYear,
+        'availableYears' => $availableYears,
+        'categories' => $categories,
+        'yearlySummary' => $yearlySummary,
+        'months' => [
+          '01' => 'January',
+          '02' => 'February',
+          '03' => 'March',
+          '04' => 'April',
+          '05' => 'May',
+          '06' => 'June',
+          '07' => 'July',
+          '08' => 'August',
+          '09' => 'September',
+          '10' => 'October',
+          '11' => 'November',
+          '12' => 'December'
+        ]
+      ]);
+    }
+
+    // For list view, get the detailed data
+    // Get filtered expenses
+    $expenses = $this->expenseService->getFilteredExpenses([
+      'user_id' => $user->id,
+      'month' => $selectedMonth,
+      'year' => $selectedYear,
+      'category' => $selectedCategory,
+      'per_page' => 15
+    ]);
+
+    // Get summary data for the selected month
+    $summary = $this->expenseService->getMonthlySummary(
+      $user,
+      $selectedYear,
+      $selectedMonth
+    );
+
+    // Get category breakdown for the selected month
+    $categoryBreakdown = $this->expenseService->getCategoryBreakdown(
+      $user,
+      "{$selectedYear}-{$selectedMonth}-01",
+      now()->endOfMonth()->format('Y-m-d')
+    );
+
+    // Get payment method breakdown for the selected month
+    $paymentMethodBreakdown = $this->expenseService->getPaymentMethodBreakdown(
+      $user,
+      "{$selectedYear}-{$selectedMonth}-01",
+      now()->endOfMonth()->format('Y-m-d')
+    );
+
+    return view('expenses.index', [
+      'viewMode' => 'list',
+      'expenses' => $expenses,
+      'summary' => $summary,
+      'availableYears' => $availableYears,
+      'categories' => $categories,
+      'selectedYear' => $selectedYear,
+      'selectedMonth' => $selectedMonth,
+      'selectedCategory' => $selectedCategory,
+      'categoryBreakdown' => $categoryBreakdown,
+      'paymentMethodBreakdown' => $paymentMethodBreakdown,
+      'monthlySummaries' => $monthlySummaries,
+      'yearlySummary' => $yearlySummary,
+      'previousYearSummary' => $previousYearSummary,
+      'months' => [
+        '01' => 'January',
+        '02' => 'February',
+        '03' => 'March',
+        '04' => 'April',
+        '05' => 'May',
+        '06' => 'June',
+        '07' => 'July',
+        '08' => 'August',
+        '09' => 'September',
+        '10' => 'October',
+        '11' => 'November',
+        '12' => 'December'
+      ]
+    ]);
   }
 
   /**
@@ -32,16 +208,18 @@ class ExpenseController extends Controller
    */
   public function create()
   {
-    /** @var \App\Models\User $user */
-    $user = Auth::user();
-    
-    return view('expenses.create', [
-      'expense' => new Expense(),
-      'categories' => $this->getExpenseCategories(),
-      'recurringIntervals' => $this->getRecurringIntervals(),
-      'paymentMethods' => $this->getPaymentMethods(),
-      'budgets' => $user->budgets()->orderBy('category')->orderBy('budget_name')->get(),
-    ]);
+      $categories = $this->expenseService->getExpenseCategories();
+      $paymentMethods = $this->expenseService->getPaymentMethods();
+      $recurringIntervals = $this->expenseService->getRecurringIntervals();
+      $budgets = $this->expenseService->getUserBudgets(Auth::user());
+
+      return view('expenses.create', [
+          'expense' => new Expense(),
+          'categories' => $categories,
+          'paymentMethods' => $paymentMethods,
+          'recurringIntervals' => $recurringIntervals,
+          'budgets' => $budgets
+      ]);
   }
 
   /**
@@ -60,22 +238,18 @@ class ExpenseController extends Controller
       'recurring_interval' => [
         Rule::requiredIf(fn() => $request->boolean('is_recurring')),
         'nullable',
-        Rule::in(array_keys($this->getRecurringIntervals())),
+        Rule::in(array_keys($this->expenseService->getRecurringIntervals())),
       ],
       'payment_method' => 'required|string|max:255',
       'receipt' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048',
     ]);
 
     try {
-      // Handle receipt upload
-      if ($request->hasFile('receipt')) {
-        $receiptPath = $request->file('receipt')->store('receipts', 'public');
-        $validated['receipt_path'] = $receiptPath;
-      }
-
-      /** @var \App\Models\User $user */
-      $user = Auth::user();
-      $expense = $user->expenses()->create($validated);
+      $expense = $this->expenseService->createExpense(
+        Auth::user(),
+        $validated,
+        $request->file('receipt')
+      );
 
       return redirect()
         ->route('expenses.index')
@@ -95,9 +269,8 @@ class ExpenseController extends Controller
   public function show(Expense $expense)
   {
     $this->authorize('view', $expense);
-    
-    // Eager load the budget relationship
-    $expense->load('budget');
+
+    $expense = $this->expenseService->getExpenseWithRelations($expense);
 
     return view('expenses.show', compact('expense'));
   }
@@ -108,23 +281,15 @@ class ExpenseController extends Controller
   public function edit(Expense $expense)
   {
     $this->authorize('update', $expense);
-    
-    /** @var \App\Models\User $user */
-    $user = Auth::user();
-    $budgets = $user->budgets()
-        ->orderBy('category')
-        ->orderBy('budget_name')
-        ->get();
-        
-    // Eager load the budget relationship
-    $expense->load('budget');
+
+    $expense = $this->expenseService->getExpenseWithRelations($expense);
 
     return view('expenses.edit', [
       'expense' => $expense,
-      'categories' => $this->getExpenseCategories(),
-      'recurringIntervals' => $this->getRecurringIntervals(),
-      'paymentMethods' => $this->getPaymentMethods(),
-      'budgets' => $budgets,
+      'categories' => $this->expenseService->getExpenseCategories(),
+      'recurringIntervals' => $this->expenseService->getRecurringIntervals(),
+      'paymentMethods' => $this->expenseService->getPaymentMethods(),
+      'budgets' => $this->expenseService->getUserBudgets(Auth::user()),
     ]);
   }
 
@@ -146,25 +311,18 @@ class ExpenseController extends Controller
       'recurring_interval' => [
         Rule::requiredIf(fn() => $request->boolean('is_recurring')),
         'nullable',
-        Rule::in(array_keys($this->getRecurringIntervals())),
+        Rule::in(array_keys($this->expenseService->getRecurringIntervals())),
       ],
       'payment_method' => 'required|string|max:255',
       'receipt' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048',
     ]);
 
     try {
-      // Handle receipt upload
-      if ($request->hasFile('receipt')) {
-        // Delete old receipt if exists
-        if ($expense->receipt_path) {
-          Storage::disk('public')->delete($expense->receipt_path);
-        }
-
-        $receiptPath = $request->file('receipt')->store('receipts', 'public');
-        $validated['receipt_path'] = $receiptPath;
-      }
-
-      $expense->update($validated);
+      $this->expenseService->updateExpense(
+        $expense,
+        $validated,
+        $request->file('receipt')
+      );
 
       return redirect()
         ->route('expenses.index')
@@ -186,12 +344,7 @@ class ExpenseController extends Controller
     $this->authorize('delete', $expense);
 
     try {
-      // Delete receipt file if exists
-      if ($expense->receipt_path) {
-        Storage::disk('public')->delete($expense->receipt_path);
-      }
-
-      $expense->delete();
+      $this->expenseService->deleteExpense($expense);
 
       return redirect()
         ->route('expenses.index')
@@ -205,51 +358,31 @@ class ExpenseController extends Controller
   }
 
   /**
-   * Get the list of expense categories.
+   * Get monthly expenses summary
    */
-  protected function getExpenseCategories(): array
+  public function getMonthlySummary(int $year = null, int $month = null)
   {
-    return [
-      'Food & Dining',
-      'Transportation',
-      'Utilities',
-      'Shopping',
-      'Entertainment',
-      'Healthcare',
-      'Education',
-      'Travel',
-      'Insurance',
-      'Subscriptions',
-      'Other',
-    ];
+    return $this->expenseService->getMonthlySummary(
+      Auth::user(),
+      $year,
+      $month
+    );
   }
 
   /**
-   * Get the list of recurring intervals.
+   * Get expenses by date range
    */
-  protected function getRecurringIntervals(): array
+  public function getExpensesByDateRange(Request $request)
   {
-    return [
-      'daily' => 'Daily',
-      'weekly' => 'Weekly',
-      'monthly' => 'Monthly',
-      'yearly' => 'Yearly',
-    ];
-  }
+    $validated = $request->validate([
+      'start_date' => 'required|date',
+      'end_date' => 'required|date|after_or_equal:start_date',
+    ]);
 
-  /**
-   * Get the list of payment methods.
-   */
-  protected function getPaymentMethods(): array
-  {
-    return [
-      'cash' => 'Cash',
-      'credit_card' => 'Credit Card',
-      'debit_card' => 'Debit Card',
-      'bank_transfer' => 'Bank Transfer',
-      'digital_wallet' => 'Digital Wallet',
-      'check' => 'Check',
-      'other' => 'Other',
-    ];
+    return $this->expenseService->filterByDateRange(
+      Auth::user(),
+      $validated['start_date'],
+      $validated['end_date']
+    );
   }
 }
